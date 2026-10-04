@@ -21,6 +21,7 @@
         zephyr,flash = &flash0;
         zmk,kscan = &kscan0;
         zmk,physical-layout = &sofle_layout;
+        zephyr,console = &cdc_acm_uart;
         zmk,underglow = &led_strip;
         zmk,battery = &vbatt;
     };
@@ -81,6 +82,9 @@
 
 &usbd {
     status = "okay";
+    cdc_acm_uart: cdc_acm_uart {
+        compatible = "zephyr,cdc-acm-uart";
+    };
 };
 
 zephyr_udc0: &usbd {
