@@ -11,6 +11,6 @@ manifest:
       import: app/west.yml
     - name: hammerbeam-slideshow
       remote: gpeye
-      revision: main 
+      revision: 9c16436efa4c87d19e2e4558927969c7ddd5851d
   self:
     path: config
