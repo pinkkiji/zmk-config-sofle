@@ -16,7 +16,9 @@ LV_IMG_DECLARE(custom_art);
 #define ART_FLASH_ADDR DT_REG_ADDR(DT_NODELABEL(image_partition))
 
 static lv_obj_t *art_obj;
-static lv_timer_t *anim_timer;
+static struct k_work_delayable anim_work;
+static int64_t anim_next_ms;
+static uint16_t anim_interval_ms;
 static lv_img_dsc_t frames[ART_MAX_FRAMES];
 static uint16_t nframes;
 static uint16_t cur;
@@ -85,19 +87,29 @@ const struct art_header *eyelash_art_header(void) {
     return h;
 }
 
-static void anim_cb(lv_timer_t *t) {
+/* 表示キュー上の時刻管理つきタイマー（LVGL のタイマーは転送中に遅れるため使わない） */
+static void anim_cb(struct k_work *work) {
+    if (nframes < 2 || !art_obj) {
+        return;
+    }
     cur = (cur + 1) % nframes;
     lv_img_set_src(art_obj, &frames[cur]);
+    lv_refr_now(NULL); /* 次の tick を待たず、すぐ描く */
+    anim_next_ms += anim_interval_ms;
+    int64_t now = k_uptime_get();
+    int64_t d = anim_next_ms - now;
+    if (d < 0) {
+        anim_next_ms = now;
+        d = 0;
+    }
+    k_work_reschedule_for_queue(zmk_display_work_q(), &anim_work, K_MSEC(d));
 }
 
 static void apply(void) {
     if (!art_obj) {
         return;
     }
-    if (anim_timer) {
-        lv_timer_del(anim_timer);
-        anim_timer = NULL;
-    }
+    k_work_cancel_delayable(&anim_work);
     lv_img_cache_invalidate_src(NULL);
 
     const struct art_header *h = eyelash_art_header();
@@ -119,8 +131,10 @@ static void apply(void) {
     }
     cur = 0;
     lv_img_set_src(art_obj, &frames[0]);
-    if (nframes > 1 && h->interval_ms >= 20) {
-        anim_timer = lv_timer_create(anim_cb, h->interval_ms, NULL);
+    if (nframes > 1) {
+        anim_interval_ms = h->interval_ms >= 20 ? h->interval_ms : 20;
+        anim_next_ms = k_uptime_get() + anim_interval_ms;
+        k_work_reschedule_for_queue(zmk_display_work_q(), &anim_work, K_MSEC(anim_interval_ms));
     }
 }
 
@@ -131,6 +145,7 @@ static void apply_work_cb(struct k_work *work) {
 static K_WORK_DEFINE(apply_work, apply_work_cb);
 
 void eyelash_art_attach(lv_obj_t *img) {
+    k_work_init_delayable(&anim_work, anim_cb);
     art_obj = img;
     install_spy();
     apply();
