@@ -2,8 +2,10 @@
 """二値PNGを、LVGL の1ビットインデックス画像(C配列)に変換する。
 
 使い方:  python tools/gen_art.py 入力.png 出力.c
-- 入力は、キーボードで見たままの縦向き 68x140（幅68・高さ140）。上が画面の上。
+- 入力は、キーボードで見たままの縦向き 68x137（幅68・高さ137）。上が画面の上。
   画面の上端20pxは、バッテリー/接続の表示なので、画像はその下の領域になる。
+  画面の下端3pxは実機で見えないため、領域は137行。内部では下に白3行を足して140行にする。
+  （互換のため 68x140 も受け付ける）
 - 純粋な白と黒だけの画像。灰色があれば、数を表示して、中止する。
 - 内部の向き（横140x縦68）へ、時計回り90度に回して変換する。
 - 出力は ZMK の nice!view 用。index0=黒、index1=白（標準の art.c と同じ並び）。
@@ -12,13 +14,18 @@ import sys
 from PIL import Image
 
 W, H = 140, 68      # 内部（ZMK/LVGL）の向き
-VW, VH = 68, 140    # 見たままの縦向き
+VW, VH = 68, 140    # 内部で扱う縦向き（下3行は見えない領域）
+VISIBLE_H = 137     # 実際に見える高さ
 
 
 def convert(src, dst):
     im = Image.open(src)
+    if im.size == (VW, VISIBLE_H):
+        padded = Image.new(im.mode if im.mode in ("1", "L") else "L", (VW, VH), 255 if im.mode != "1" else 1)
+        padded.paste(im if im.mode in ("1", "L") else im.convert("L"), (0, 0))
+        im = padded
     if im.size != (VW, VH):
-        sys.exit(f"サイズが違います: {im.size}（幅{VW} x 高さ{VH} が必要）")
+        sys.exit(f"サイズが違います: {im.size}（幅{VW} x 高さ{VISIBLE_H} が必要）")
     # 見たままの縦向き -> 内部の横向き（時計回り90度）。実機で確認済みの向き
     im = im.convert("L").transpose(Image.ROTATE_270)
     px = im
