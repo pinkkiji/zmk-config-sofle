@@ -18,7 +18,8 @@ LV_IMG_DECLARE(custom_art);
 static lv_obj_t *art_obj;
 static struct k_work_delayable anim_work;
 static int64_t anim_next_ms;
-static uint16_t anim_interval_ms;
+static uint16_t anim_uniform_ms;
+static const uint16_t *anim_durations;
 static lv_img_dsc_t frames[ART_MAX_FRAMES];
 static uint16_t nframes;
 static uint16_t cur;
@@ -75,6 +76,19 @@ size_t eyelash_art_spy_read(uint8_t *out, size_t max) {
 
 uint32_t eyelash_art_flash_addr(void) { return ART_FLASH_ADDR; }
 
+const uint16_t *eyelash_art_durations(void) {
+    const struct art_header *h = (const struct art_header *)ART_FLASH_ADDR;
+    if (!(h->flags & ART_FLAG_DURATIONS)) {
+        return NULL;
+    }
+    return (const uint16_t *)(ART_FLASH_ADDR + sizeof(struct art_header));
+}
+
+static uint16_t frame_ms(uint16_t i) {
+    uint16_t ms = anim_durations ? anim_durations[i] : anim_uniform_ms;
+    return ms >= 20 ? ms : 20;
+}
+
 const struct art_header *eyelash_art_header(void) {
     const struct art_header *h = (const struct art_header *)ART_FLASH_ADDR;
     if (h->magic != ART_MAGIC || h->version != 1 || h->frames == 0 || h->frames > ART_MAX_FRAMES) {
@@ -95,7 +109,7 @@ static void anim_cb(struct k_work *work) {
     cur = (cur + 1) % nframes;
     lv_img_set_src(art_obj, &frames[cur]);
     lv_refr_now(NULL); /* 次の tick を待たず、すぐ描く */
-    anim_next_ms += anim_interval_ms;
+    anim_next_ms += frame_ms(cur);
     int64_t now = k_uptime_get();
     int64_t d = anim_next_ms - now;
     if (d < 0) {
@@ -132,9 +146,10 @@ static void apply(void) {
     cur = 0;
     lv_img_set_src(art_obj, &frames[0]);
     if (nframes > 1) {
-        anim_interval_ms = h->interval_ms >= 20 ? h->interval_ms : 20;
-        anim_next_ms = k_uptime_get() + anim_interval_ms;
-        k_work_reschedule_for_queue(zmk_display_work_q(), &anim_work, K_MSEC(anim_interval_ms));
+        anim_uniform_ms = h->interval_ms;
+        anim_durations = eyelash_art_durations();
+        anim_next_ms = k_uptime_get() + frame_ms(0);
+        k_work_reschedule_for_queue(zmk_display_work_q(), &anim_work, K_MSEC(frame_ms(0)));
     }
 }
 

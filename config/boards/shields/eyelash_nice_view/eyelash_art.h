@@ -11,6 +11,7 @@
 #define ART_HDR_SIZE 4096    /* 先頭1ページがヘッダ */
 #define ART_PART_SIZE 0x2C000
 #define ART_MAX_FRAMES ((ART_PART_SIZE - ART_HDR_SIZE) / ART_FRAME_BYTES) /* 142 */
+#define ART_FLAG_DURATIONS 0x0001
 #define ART_MAGIC 0x4d495345u                                             /* 'ESIM' */
 
 struct art_header {
@@ -18,7 +19,7 @@ struct art_header {
     uint16_t version;
     uint16_t frames;
     uint16_t interval_ms;
-    uint16_t reserved;
+    uint16_t flags; /* bit0: ヘッダの直後に、フレームごとの表示時間(u16 x frames)がある */
     uint32_t data_crc32;
     uint32_t pad; /* 16バイトに揃える */
 };
@@ -29,6 +30,8 @@ void eyelash_art_attach(lv_obj_t *img);
 void eyelash_art_reload_sync(void);
 /* 保存済みで有効な画像のヘッダ（なければ NULL） */
 const struct art_header *eyelash_art_header(void);
+/* フレームごとの表示時間(ms)の配列。なければ NULL（その場合は header->interval_ms で一定） */
+const uint16_t *eyelash_art_durations(void);
 /* フラッシュ上の画像領域の先頭アドレス（メモリマップ） */
 uint32_t eyelash_art_flash_addr(void);
 

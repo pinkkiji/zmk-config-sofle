@@ -6,6 +6,7 @@
  * コマンド: P=ping B=開始 D=データ E=確定 C=消去 L=描画の記録 R=ブートローダーへ再起動
  * SPDX-License-Identifier: MIT
  */
+#include <string.h>
 #include <zephyr/kernel.h>
 #include <zephyr/device.h>
 #include <zephyr/drivers/uart.h>
@@ -32,6 +33,8 @@ static bool receiving;
 static uint16_t pend_frames;
 static uint16_t pend_interval;
 static uint32_t pend_crc;
+static bool pend_has_dur;
+static uint16_t pend_dur[ART_MAX_FRAMES];
 
 static uint16_t crc16_update(uint16_t c, uint8_t b) {
     c ^= (uint16_t)b << 8;
@@ -89,7 +92,7 @@ static void handle(uint8_t cmd, const uint8_t *p, uint16_t n) {
         break;
     }
     case 'B': {
-        if (n != 8) {
+        if (n < 8) {
             ack(cmd, ST_BAD_ARGS);
             break;
         }
@@ -101,6 +104,15 @@ static void handle(uint8_t cmd, const uint8_t *p, uint16_t n) {
         if (frames > ART_MAX_FRAMES) {
             ack(cmd, ST_TOO_MANY);
             break;
+        }
+        /* 8バイトのあとに、フレームごとの表示時間(u16 x frames)が続いてもよい */
+        if (n != 8 && n != 8 + 2 * frames) {
+            ack(cmd, ST_BAD_ARGS);
+            break;
+        }
+        pend_has_dur = (n != 8);
+        for (uint16_t i = 0; pend_has_dur && i < frames; i++) {
+            pend_dur[i] = rd16(p + 8 + 2 * i);
         }
         pend_frames = frames;
         pend_interval = rd16(p + 2);
@@ -155,16 +167,25 @@ static void handle(uint8_t cmd, const uint8_t *p, uint16_t n) {
             ack(cmd, ST_CRC);
             break;
         }
+        /* ヘッダ + 表示時間の表を、1回で書く（4バイト境界） */
+        static uint8_t hb[sizeof(struct art_header) + ((ART_MAX_FRAMES * 2 + 3) & ~3)];
+        memset(hb, 0, sizeof(hb));
         struct art_header h = {
             .magic = ART_MAGIC,
             .version = 1,
             .frames = pend_frames,
             .interval_ms = pend_interval,
-            .reserved = 0,
+            .flags = pend_has_dur ? ART_FLAG_DURATIONS : 0,
             .data_crc32 = pend_crc,
             .pad = 0,
         };
-        if (flash_area_write(fa, 0, &h, sizeof(h)) != 0) {
+        memcpy(hb, &h, sizeof(h));
+        size_t wlen = sizeof(h);
+        if (pend_has_dur) {
+            memcpy(hb + sizeof(h), pend_dur, (size_t)pend_frames * 2);
+            wlen += (((size_t)pend_frames * 2) + 3) & ~(size_t)3;
+        }
+        if (flash_area_write(fa, 0, hb, wlen) != 0) {
             ack(cmd, ST_FLASH);
             break;
         }
