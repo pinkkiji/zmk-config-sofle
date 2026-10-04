@@ -115,7 +115,8 @@ int zmk_widget_status_init(struct zmk_widget_status *widget, lv_obj_t *parent) {
 
     lv_obj_t *art = lv_img_create(widget->obj);
     lv_img_set_src(art, &custom_art);
-    lv_obj_align(art, LV_ALIGN_TOP_LEFT, 0, 0);
+    /* 画面の下端3px(内部のx=0..2)は実機で見えないので、絵を3pxずらして全体を見せる */
+    lv_obj_align(art, LV_ALIGN_TOP_LEFT, 3, 0);
 
     sys_slist_append(&widgets, &widget->node);
     widget_battery_status_init();
