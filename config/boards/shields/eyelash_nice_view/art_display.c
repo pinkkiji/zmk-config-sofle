@@ -27,7 +27,8 @@ static K_SEM_DEFINE(reload_done, 0, 1);
 static struct art_flush_rec spy[SPY_N];
 static uint32_t spy_head; /* 次に書く位置（通し番号） */
 static uint32_t spy_tail; /* 次に読む位置（通し番号） */
-static lv_disp_flush_cb_t orig_flush;
+typedef void (*flush_cb_t)(lv_disp_drv_t *, const lv_area_t *, lv_color_t *);
+static flush_cb_t orig_flush;
 
 static void flush_spy(lv_disp_drv_t *drv, const lv_area_t *a, lv_color_t *c) {
     uint32_t t0 = k_cyc_to_us_floor32(k_cycle_get_32());
