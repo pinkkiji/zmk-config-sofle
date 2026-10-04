@@ -7,6 +7,10 @@ include:
     artifact-name: sofle_left_nostudio
   - board: sofle_left
     shield: nice_view
+    snippet: zmk-usb-logging
+    artifact-name: sofle_left_logging
+  - board: sofle_left
+    shield: nice_view
     snippet: studio-rpc-usb-uart
     cmake-args: -DCONFIG_ZMK_STUDIO=y -DCONFIG_ZMK_STUDIO_LOCKING=n
     artifact-name: sofle_studio_left
