@@ -234,3 +234,16 @@
         };
     };
 };
+
+#ifdef TEST_NOVCOM
+&nice_view {
+    /delete-property/ serial-vcom-inversion;
+    /delete-property/ serial-vcom-interval;
+};
+#endif
+
+#ifdef TEST_VCOM1000
+&nice_view {
+    serial-vcom-interval = <1000>;
+};
+#endif
