@@ -40,3 +40,5 @@ struct art_flush_rec {
 };
 /* 記録を out に詰める（最大 max バイト）。読んだ分は消える。戻り値は書いたバイト数 */
 size_t eyelash_art_spy_read(uint8_t *out, size_t max);
+/* 描画時間の測定: 絵を隠した場合と出した場合の lv_refr_now の所要時間(us)。表示キューで実行し、完了を待つ */
+void eyelash_art_timing(uint32_t *hidden_us, uint32_t *shown_us);

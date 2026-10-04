@@ -151,6 +151,35 @@ void eyelash_art_attach(lv_obj_t *img) {
     apply();
 }
 
+static uint32_t t_hidden_us;
+static uint32_t t_shown_us;
+static K_SEM_DEFINE(timing_done, 0, 1);
+
+static void timing_work_cb(struct k_work *work) {
+    if (art_obj) {
+        lv_obj_add_flag(art_obj, LV_OBJ_FLAG_HIDDEN);
+        lv_obj_invalidate(lv_scr_act());
+        uint32_t a = k_cyc_to_us_floor32(k_cycle_get_32());
+        lv_refr_now(NULL);
+        t_hidden_us = k_cyc_to_us_floor32(k_cycle_get_32()) - a;
+        lv_obj_clear_flag(art_obj, LV_OBJ_FLAG_HIDDEN);
+        lv_obj_invalidate(lv_scr_act());
+        a = k_cyc_to_us_floor32(k_cycle_get_32());
+        lv_refr_now(NULL);
+        t_shown_us = k_cyc_to_us_floor32(k_cycle_get_32()) - a;
+    }
+    k_sem_give(&timing_done);
+}
+static K_WORK_DEFINE(timing_work, timing_work_cb);
+
+void eyelash_art_timing(uint32_t *hidden_us, uint32_t *shown_us) {
+    k_sem_reset(&timing_done);
+    k_work_submit_to_queue(zmk_display_work_q(), &timing_work);
+    k_sem_take(&timing_done, K_SECONDS(3));
+    *hidden_us = t_hidden_us;
+    *shown_us = t_shown_us;
+}
+
 void eyelash_art_reload_sync(void) {
     k_sem_reset(&reload_done);
     k_work_submit_to_queue(zmk_display_work_q(), &apply_work);

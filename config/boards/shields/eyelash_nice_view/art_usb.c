@@ -188,6 +188,14 @@ static void handle(uint8_t cmd, const uint8_t *p, uint16_t n) {
         send('l', buf, (uint16_t)m);
         break;
     }
+    case 'T': {
+        uint32_t h, s;
+        eyelash_art_timing(&h, &s);
+        uint8_t r[8] = {h & 0xff, (h >> 8) & 0xff, (h >> 16) & 0xff, h >> 24,
+                        s & 0xff, (s >> 8) & 0xff, (s >> 16) & 0xff, s >> 24};
+        send('t', r, sizeof(r));
+        break;
+    }
     case 'R': {
         ack(cmd, ST_OK);
         k_msleep(100); /* 応答がホストに届くのを待つ */
