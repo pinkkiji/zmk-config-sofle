@@ -235,7 +235,7 @@
     };
 };
 
-#ifdef TEST_NOVCOM
+#if defined(TEST_NOVCOM) || defined(TEST_CSLOW) || defined(TEST_SLOWSPI)
 &nice_view {
     /delete-property/ serial-vcom-inversion;
     /delete-property/ serial-vcom-interval;
@@ -245,5 +245,17 @@
 #ifdef TEST_VCOM1000
 &nice_view {
     serial-vcom-interval = <1000>;
+};
+#endif
+
+#ifdef TEST_CSLOW
+&nice_view_spi {
+    cs-gpios = <&pro_micro 1 GPIO_ACTIVE_LOW>;
+};
+#endif
+
+#ifdef TEST_SLOWSPI
+&nice_view {
+    spi-max-frequency = <125000>;
 };
 #endif
