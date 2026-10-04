@@ -20,3 +20,10 @@
         zephyr,display = &nice_view;
     };
 };
+
+/* 右手のUSBシリアル（画像送信用）。zephyr_udc0 は eyelash_sofle の dtsi が定義 */
+&zephyr_udc0 {
+    art_cdc: art_cdc_acm_uart {
+        compatible = "zephyr,cdc-acm-uart";
+    };
+};
