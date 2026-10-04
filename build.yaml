@@ -28,5 +28,13 @@ include:
     cmake-args: -DDTS_EXTRA_CPPFLAGS=-DTEST_VCOM1000
     artifact-name: sofle_left_vcom1000
   - board: nice_nano//zmk
+    shield: eyelash_sofle_left nice_view_adapter nice_view
+    cmake-args: -DDTS_EXTRA_CPPFLAGS=-DTEST_NOVCOM -DCONFIG_EYELASH_DISPLAY_REFRESH=y
+    artifact-name: sofle_left_refresh_novcom
+  - board: nice_nano//zmk
+    shield: eyelash_sofle_left nice_view_adapter nice_view
+    cmake-args: -DCONFIG_EYELASH_DISPLAY_REFRESH=y
+    artifact-name: sofle_left_refresh
+  - board: nice_nano//zmk
     shield: settings_reset
     artifact-name: settings_reset

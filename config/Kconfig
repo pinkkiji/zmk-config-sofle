@@ -1,0 +1,8 @@
+config EYELASH_DISPLAY_REFRESH
+    bool "Periodically invalidate the whole screen (keeps the nice!view clone alive)"
+    depends on ZMK_DISPLAY
+
+config EYELASH_DISPLAY_REFRESH_MS
+    int "Redraw interval in ms"
+    default 200
+    depends on EYELASH_DISPLAY_REFRESH
