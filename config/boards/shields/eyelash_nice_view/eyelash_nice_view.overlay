@@ -41,12 +41,3 @@
         };
     };
 };
-
-/* 確認用ビルド(-DEYELASH_ART_DEBUG): ログを右手のUSBシリアルへ出す */
-#ifdef EYELASH_ART_DEBUG
-/ {
-    chosen {
-        zephyr,console = &art_cdc;
-    };
-};
-#endif

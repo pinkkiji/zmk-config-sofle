@@ -31,3 +31,12 @@ void eyelash_art_reload_sync(void);
 const struct art_header *eyelash_art_header(void);
 /* フラッシュ上の画像領域の先頭アドレス（メモリマップ） */
 uint32_t eyelash_art_flash_addr(void);
+
+/* 描画の記録（LVGL → 画面ドライバーの転送1回ごと） */
+struct art_flush_rec {
+    int16_t x1, y1, x2, y2;
+    uint32_t start_us;
+    uint32_t dur_us;
+};
+/* 記録を out に詰める（最大 max バイト）。読んだ分は消える。戻り値は書いたバイト数 */
+size_t eyelash_art_spy_read(uint8_t *out, size_t max);

@@ -8,7 +8,3 @@ include:
     shield: eyelash_sofle_right eyelash_nice_view
   - board: nice_nano_v2
     shield: settings_reset
-  - board: nice_nano_v2
-    shield: eyelash_sofle_right eyelash_nice_view
-    cmake-args: -DDTS_EXTRA_CPPFLAGS=-DEYELASH_ART_DEBUG -DCONFIG_LOG=y -DCONFIG_LOG_BACKEND_UART=y -DCONFIG_UART_CONSOLE=y -DCONFIG_DISPLAY_LOG_LEVEL_DBG=y -DCONFIG_LOG_MODE_IMMEDIATE=y
-    artifact-name: sofle_right_dbg

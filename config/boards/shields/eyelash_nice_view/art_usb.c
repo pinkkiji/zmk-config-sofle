@@ -3,7 +3,7 @@
  * フレーム: 'E' 'S' cmd len(2,LE) payload crc16(2,LE)
  *   crc16 は cmd..payload が対象。CCITT 0x1021、初期値 0xFFFF、MSB先頭
  * 応答は cmd='a' payload=[元のcmd, 状態]。ping は cmd='p'。
- * コマンド: P=ping B=開始 D=データ E=確定 C=消去 R=ブートローダーへ再起動
+ * コマンド: P=ping B=開始 D=データ E=確定 C=消去 L=描画の記録 R=ブートローダーへ再起動
  * SPDX-License-Identifier: MIT
  */
 #include <zephyr/kernel.h>
@@ -180,6 +180,12 @@ static void handle(uint8_t cmd, const uint8_t *p, uint16_t n) {
         }
         eyelash_art_reload_sync();
         ack(cmd, ST_OK);
+        break;
+    }
+    case 'L': {
+        uint8_t buf[sizeof(struct art_flush_rec) * 24];
+        size_t m = eyelash_art_spy_read(buf, sizeof(buf));
+        send('l', buf, (uint16_t)m);
         break;
     }
     case 'R': {

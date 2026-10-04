@@ -3,6 +3,7 @@
  * 複数フレームなら、一定間隔で切り替える。
  * SPDX-License-Identifier: MIT
  */
+#include <string.h>
 #include <zephyr/kernel.h>
 #include <zephyr/devicetree.h>
 #include <zephyr/sys/crc.h>
@@ -20,6 +21,54 @@ static lv_img_dsc_t frames[ART_MAX_FRAMES];
 static uint16_t nframes;
 static uint16_t cur;
 static K_SEM_DEFINE(reload_done, 0, 1);
+
+/* ---- 描画の記録 ---- */
+#define SPY_N 24
+static struct art_flush_rec spy[SPY_N];
+static uint32_t spy_head; /* 次に書く位置（通し番号） */
+static uint32_t spy_tail; /* 次に読む位置（通し番号） */
+static lv_disp_flush_cb_t orig_flush;
+
+static void flush_spy(lv_disp_drv_t *drv, const lv_area_t *a, lv_color_t *c) {
+    uint32_t t0 = k_cyc_to_us_floor32(k_cycle_get_32());
+    orig_flush(drv, a, c);
+    uint32_t t1 = k_cyc_to_us_floor32(k_cycle_get_32());
+    struct art_flush_rec *r = &spy[spy_head % SPY_N];
+    r->x1 = a->x1;
+    r->y1 = a->y1;
+    r->x2 = a->x2;
+    r->y2 = a->y2;
+    r->start_us = t0;
+    r->dur_us = t1 - t0;
+    spy_head++;
+}
+
+static void install_spy(void) {
+    static bool done;
+    if (done) {
+        return;
+    }
+    lv_disp_t *disp = lv_disp_get_default();
+    if (!disp) {
+        return;
+    }
+    orig_flush = disp->driver->flush_cb;
+    disp->driver->flush_cb = flush_spy;
+    done = true;
+}
+
+size_t eyelash_art_spy_read(uint8_t *out, size_t max) {
+    size_t n = 0;
+    if (spy_head - spy_tail > SPY_N) {
+        spy_tail = spy_head - SPY_N;
+    }
+    while (spy_tail != spy_head && n + sizeof(struct art_flush_rec) <= max) {
+        memcpy(out + n, &spy[spy_tail % SPY_N], sizeof(struct art_flush_rec));
+        n += sizeof(struct art_flush_rec);
+        spy_tail++;
+    }
+    return n;
+}
 
 uint32_t eyelash_art_flash_addr(void) { return ART_FLASH_ADDR; }
 
@@ -82,6 +131,7 @@ static K_WORK_DEFINE(apply_work, apply_work_cb);
 
 void eyelash_art_attach(lv_obj_t *img) {
     art_obj = img;
+    install_spy();
     apply();
 }
 
