@@ -8,7 +8,7 @@
     status = "okay";
     nice_view: ls0xx@0 {
         compatible = "sharp,ls0xx";
-        spi-max-frequency = <2000000>;
+        spi-max-frequency = <1000000>;
         reg = <0>;
         width = <160>;
         height = <68>;
@@ -41,3 +41,12 @@
         };
     };
 };
+
+/* 確認用ビルド(-DEYELASH_ART_DEBUG): ログを右手のUSBシリアルへ出す */
+#ifdef EYELASH_ART_DEBUG
+/ {
+    chosen {
+        zephyr,console = &art_cdc;
+    };
+};
+#endif
