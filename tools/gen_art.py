@@ -8,7 +8,7 @@
   サイズが違う画像は拒否する。
 - 純粋な白と黒だけの画像。灰色があれば、数を表示して、中止する。
 - 内部の向き（横140x縦68）へ、時計回り90度に回して変換する。
-- 出力は ZMK の nice!view 用。index0=黒、index1=白（標準の art.c と同じ並び）。
+- 出力は nice!view 用。実機で確認した向きに合わせ、ZMK 標準とはパレットが逆（index0=白、index1=黒）。
 """
 import sys
 from PIL import Image
@@ -48,8 +48,8 @@ def convert(src, dst):
 #endif
 
 const LV_ATTRIBUTE_MEM_ALIGN LV_ATTRIBUTE_LARGE_CONST uint8_t custom_art_map[] = {{
-        0x00, 0x00, 0x00, 0xff, /*Color of index 0*/
-        0xff, 0xff, 0xff, 0xff, /*Color of index 1*/
+        0xff, 0xff, 0xff, 0xff, /*Color of index 0 (画像の黒 -> 白い画素)*/
+        0x00, 0x00, 0x00, 0xff, /*Color of index 1 (画像の白 -> 黒い画素)*/
 
 {body}
 }};
