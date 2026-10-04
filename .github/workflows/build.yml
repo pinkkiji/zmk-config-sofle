@@ -9,3 +9,26 @@ jobs:
   build:
     uses: zmkfirmware/zmk/.github/workflows/build-user-config.yml@v0.3.0
 
+  publish:
+    needs: build
+    if: github.ref == 'refs/heads/seller-fw-art'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download firmware artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: firmware
+          path: fw
+      - name: Publish to built-fw branch
+        run: |
+          cd fw
+          echo "branch=${{ github.ref_name }} sha=${{ github.sha }}" > BUILD.txt
+          git init -q
+          git checkout -q -b built-fw
+          git config user.name github-actions
+          git config user.email actions@github.com
+          git add -A
+          git commit -q -m "firmware from ${{ github.sha }}"
+          git push -f "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}" built-fw
