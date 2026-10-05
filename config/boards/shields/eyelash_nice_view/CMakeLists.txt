@@ -9,6 +9,7 @@ if(CONFIG_ZMK_DISPLAY AND CONFIG_EYELASH_NV_WIDGET_STATUS)
   zephyr_library_sources(art_tunnel.c)
   zephyr_library_sources(art_update.c)
   zephyr_library_sources(screensaver.c)
+  zephyr_library_sources(art_cfg.c)
   zephyr_library_sources(art_display.c)
 
   if(NOT CONFIG_ZMK_SPLIT OR CONFIG_ZMK_SPLIT_ROLE_CENTRAL)

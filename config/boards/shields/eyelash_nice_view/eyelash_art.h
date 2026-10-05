@@ -42,6 +42,21 @@ const uint16_t *eyelash_art_durations(void);
 /* フラッシュ上の画像領域の先頭アドレス（メモリマップ） */
 uint32_t eyelash_art_flash_addr(void);
 
+/* 本体の設定（art_cfg.c）: 通信でそのまま読み書きする 12 バイト */
+struct art_cfg {
+    uint8_t ver;       /* 1 */
+    uint8_t ss_enable; /* スクリーンセーバー 0=切 1=入 */
+    uint16_t idle_s;   /* 使っていないと見なすまで（秒） */
+    uint16_t sleep_min; /* 深い眠りに入るまで（分）。0=眠らない */
+    uint8_t pattern;   /* 0=斜め 1=横しま(上下に流れる) 2=縦しま(左右に流れる) 3=跳ねる四角 */
+    uint8_t stripe;    /* しまの幅（画素） */
+    uint8_t fps;       /* 1秒あたりの更新回数 */
+    uint8_t step;      /* 1回で動く量（画素） */
+    uint8_t reserved[2];
+} __packed;
+const struct art_cfg *eyelash_cfg(void);
+int eyelash_cfg_set(const struct art_cfg *c);
+
 /* スクリーンセーバー（screensaver.c）。表示スレッドから、画面の生成時に呼ぶ */
 void eyelash_screensaver_attach(lv_obj_t *screen);
 /* 画像のアニメを一時停止/再開（スクリーンセーバーの間は止める） */
