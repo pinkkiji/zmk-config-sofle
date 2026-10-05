@@ -80,14 +80,21 @@ static void handle(uint8_t cmd, const uint8_t *p, uint16_t n) {
     switch (cmd) {
     case 'P': {
         const struct art_header *h = eyelash_art_header();
-        uint8_t r[8] = {1,
-                        ART_MAX_FRAMES & 0xff,
-                        ART_MAX_FRAMES >> 8,
-                        h ? (h->frames & 0xff) : 0,
-                        h ? (h->frames >> 8) : 0,
-                        h ? (h->interval_ms & 0xff) : 0,
-                        h ? (h->interval_ms >> 8) : 0,
-                        0};
+        /* 版2: [版, 最大フレーム(2), 保存フレーム(2), 間隔(2), 左右(1=左), 縦画面の幅(2), 縦画面の高さ(2), 1フレームのバイト数(2)] */
+        uint8_t r[14] = {2,
+                         ART_MAX_FRAMES & 0xff,
+                         ART_MAX_FRAMES >> 8,
+                         h ? (h->frames & 0xff) : 0,
+                         h ? (h->frames >> 8) : 0,
+                         h ? (h->interval_ms & 0xff) : 0,
+                         h ? (h->interval_ms >> 8) : 0,
+                         ART_SIDE_LEFT,
+                         ART_H & 0xff,
+                         ART_H >> 8,
+                         ART_W & 0xff,
+                         ART_W >> 8,
+                         ART_FRAME_BYTES & 0xff,
+                         ART_FRAME_BYTES >> 8};
         send('p', r, sizeof(r));
         break;
     }
@@ -177,7 +184,7 @@ static void handle(uint8_t cmd, const uint8_t *p, uint16_t n) {
             .interval_ms = pend_interval,
             .flags = pend_has_dur ? ART_FLAG_DURATIONS : 0,
             .data_crc32 = pend_crc,
-            .pad = 0,
+            .pad = ART_W,
         };
         memcpy(hb, &h, sizeof(h));
         size_t wlen = sizeof(h);
@@ -229,11 +236,14 @@ static void handle(uint8_t cmd, const uint8_t *p, uint16_t n) {
 }
 
 static void art_usb_thread(void *a, void *b, void *c) {
+#if !IS_ENABLED(CONFIG_ZMK_USB)
+    /* 左手(親機)は ZMK が USB を有効にする。右手だけ自分で有効にする */
     int ret = usb_enable(NULL);
     if (ret != 0 && ret != -EALREADY) {
         LOG_ERR("usb_enable failed: %d", ret);
         return;
     }
+#endif
     if (!device_is_ready(art_uart)) {
         LOG_ERR("cdc uart not ready");
         return;

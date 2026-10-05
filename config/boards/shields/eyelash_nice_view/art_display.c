@@ -94,6 +94,10 @@ const struct art_header *eyelash_art_header(void) {
     if (h->magic != ART_MAGIC || h->version != 1 || h->frames == 0 || h->frames > ART_MAX_FRAMES) {
         return NULL;
     }
+    uint16_t w = h->pad & 0xffff;
+    if ((w ? w : 140) != ART_W) {
+        return NULL; /* 左右で大きさが違う画像は表示しない */
+    }
     const uint8_t *data = (const uint8_t *)(ART_FLASH_ADDR + ART_HDR_SIZE);
     if (crc32_ieee(data, (size_t)h->frames * ART_FRAME_BYTES) != h->data_crc32) {
         return NULL;

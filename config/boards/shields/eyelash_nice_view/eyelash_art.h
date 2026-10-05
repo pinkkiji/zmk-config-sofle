@@ -5,9 +5,18 @@
 #include <stdint.h>
 #include <stdbool.h>
 
+/* 内部(横向き)の画像の大きさ。縦画面で見ると 68 x ART_W。
+ * 右手(子機) 140、左手(親機) 119（左は下のレイヤー名と上のバッテリー表示を残すため） */
+#if IS_ENABLED(CONFIG_ZMK_SPLIT_ROLE_CENTRAL)
+#define ART_W 119
+#define ART_SIDE_LEFT 1
+#else
 #define ART_W 140
+#define ART_SIDE_LEFT 0
+#endif
 #define ART_H 68
-#define ART_FRAME_BYTES 1232 /* パレット8 + 18バイト x 68行 */
+#define ART_ROW_BYTES ((ART_W + 7) / 8)
+#define ART_FRAME_BYTES (8 + ART_ROW_BYTES * ART_H) /* パレット8 + 1行のバイト数 x 68行（右 1232, 左 1028） */
 #define ART_HDR_SIZE 4096    /* 先頭1ページがヘッダ */
 #define ART_PART_SIZE 0x2C000
 #define ART_MAX_FRAMES ((ART_PART_SIZE - ART_HDR_SIZE) / ART_FRAME_BYTES) /* 142 */
@@ -21,7 +30,7 @@ struct art_header {
     uint16_t interval_ms;
     uint16_t flags; /* bit0: ヘッダの直後に、フレームごとの表示時間(u16 x frames)がある */
     uint32_t data_crc32;
-    uint32_t pad; /* 16バイトに揃える */
+    uint32_t pad; /* 下位16ビット: 画像の内部の幅（0なら140。古い保存データ用） */
 };
 
 /* 表示スレッドから: 画像オブジェクトを登録して、現在の画像を表示する */

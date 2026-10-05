@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """二値PNGを、LVGL の1ビットインデックス画像(C配列)に変換する。
 
-使い方:  python tools/gen_art.py 入力.png 出力.c
+使い方:  python tools/gen_art.py 入力.png 出力.c [--left]
+  --left: 左手用（見たままの縦向き 68x119）。指定なしは右手用（68x140）。
 - 入力は、キーボードで見たままの縦向き 68x140（幅68・高さ140）。上が画面の上。
   画面の上端17pxは、バッテリー/接続の表示。画像はその下の140行（画面の下端の
   見えない3pxは、画像を内部で3pxずらして避ける。peripheral_status.c 参照）。
@@ -13,11 +14,14 @@
 import sys
 from PIL import Image
 
-W, H = 140, 68      # 内部（ZMK/LVGL）の向き
-VW, VH = 68, 140    # 内部で扱う縦向き（下3行は見えない領域）
+W, H = 140, 68      # 内部（ZMK/LVGL）の向き。--left では 119x68
+VW, VH = 68, 140    # 見たままの縦向き。--left では 68x119
 
 
-def convert(src, dst):
+def convert(src, dst, left=False):
+    global W, H, VW, VH
+    if left:
+        W, H, VW, VH = 119, 68, 68, 119
     im = Image.open(src)
     if im.size != (VW, VH):
         sys.exit(f"サイズが違います: {im.size}（幅{VW} x 高さ{VH} が必要）")
@@ -69,6 +73,7 @@ const lv_img_dsc_t custom_art = {{
 
 
 if __name__ == "__main__":
-    if len(sys.argv) != 3:
+    args = [a for a in sys.argv[1:] if a != "--left"]
+    if len(args) != 2:
         sys.exit(__doc__)
-    convert(sys.argv[1], sys.argv[2])
+    convert(args[0], args[1], left="--left" in sys.argv)
