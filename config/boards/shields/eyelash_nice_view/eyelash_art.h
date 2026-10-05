@@ -52,3 +52,17 @@ struct art_flush_rec {
 size_t eyelash_art_spy_read(uint8_t *out, size_t max);
 /* 描画時間の測定: 絵を隠した場合と出した場合の lv_refr_now の所要時間(us)。表示キューで実行し、完了を待つ */
 void eyelash_art_timing(uint32_t *hidden_us, uint32_t *shown_us);
+
+/* ---- 左右の中継（art_tunnel.c） ---- */
+#if IS_ENABLED(CONFIG_ZMK_SPLIT_RELAY_EVENT)
+#if IS_ENABLED(CONFIG_ZMK_SPLIT_ROLE_CENTRAL)
+/* 左手: 右手へ命令を送って応答を待つ。0=成功 1=右手に届かない 2=時間切れ */
+int art_tunnel_request(uint8_t cmd, const uint8_t *p, uint16_t n, uint8_t *out_cmd, uint8_t *out,
+                       uint16_t *out_n, int timeout_ms);
+#else
+/* 右手: 左手から届いた要求の取り出し / 完了 / 応答の送信 */
+bool art_tunnel_take_request(uint8_t *cmd, const uint8_t **p, uint16_t *n);
+void art_tunnel_request_done(void);
+void art_tunnel_send_response(uint8_t cmd, const uint8_t *p, uint16_t n);
+#endif
+#endif

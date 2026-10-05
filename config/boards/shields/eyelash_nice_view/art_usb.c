@@ -46,7 +46,7 @@ static uint16_t crc16_update(uint16_t c, uint8_t b) {
 
 static void put(uint8_t b) { uart_poll_out(art_uart, b); }
 
-static void send(uint8_t cmd, const uint8_t *p, uint16_t n) {
+static void uart_send(uint8_t cmd, const uint8_t *p, uint16_t n) {
     uint16_t crc = 0xFFFF;
     put('E');
     put('S');
@@ -63,6 +63,10 @@ static void send(uint8_t cmd, const uint8_t *p, uint16_t n) {
     put(crc & 0xff);
     put(crc >> 8);
 }
+
+/* 応答の出力先。通常は USB シリアル。右手が左手からの中継を処理するときは無線へ切り替える */
+static void (*cur_sink)(uint8_t, const uint8_t *, uint16_t) = uart_send;
+static void send(uint8_t cmd, const uint8_t *p, uint16_t n) { cur_sink(cmd, p, n); }
 
 static void ack(uint8_t cmd, uint8_t status) {
     uint8_t p[2] = {cmd, status};
@@ -224,6 +228,29 @@ static void handle(uint8_t cmd, const uint8_t *p, uint16_t n) {
         send('t', r, sizeof(r));
         break;
     }
+#if IS_ENABLED(CONFIG_ZMK_SPLIT_RELAY_EVENT) && IS_ENABLED(CONFIG_ZMK_SPLIT_ROLE_CENTRAL)
+    case 'r': { /* 右手へ中継: payload = [命令, 命令の中身...]。応答は 'q' = [応答の命令, 応答の中身...] */
+        static uint8_t rb[MAX_PAYLOAD];
+        static uint8_t qb[MAX_PAYLOAD + 1];
+        uint8_t rc = 0;
+        uint16_t rn = 0;
+        if (n < 1) {
+            ack(cmd, ST_BAD_ARGS);
+            break;
+        }
+        /* 消去などで時間がかかる命令があるので、長めに待つ */
+        int err = art_tunnel_request(p[0], p + 1, n - 1, &rc, rb, &rn, 40000);
+        if (err) {
+            uint8_t e[2] = {'!', (uint8_t)err};
+            send('q', e, 2);
+        } else {
+            qb[0] = rc;
+            memcpy(qb + 1, rb, rn);
+            send('q', qb, rn + 1);
+        }
+        break;
+    }
+#endif
     case 'R': {
         ack(cmd, ST_OK);
         k_msleep(100); /* 応答がホストに届くのを待つ */
@@ -260,6 +287,20 @@ static void art_usb_thread(void *a, void *b, void *c) {
     unsigned char ch;
 
     for (;;) {
+#if IS_ENABLED(CONFIG_ZMK_SPLIT_RELAY_EVENT) && !IS_ENABLED(CONFIG_ZMK_SPLIT_ROLE_CENTRAL)
+        {
+            uint8_t tcmd;
+            const uint8_t *tp;
+            uint16_t tn;
+            if (art_tunnel_take_request(&tcmd, &tp, &tn)) {
+                cur_sink = art_tunnel_send_response;
+                handle(tcmd, tp, tn);
+                cur_sink = uart_send;
+                art_tunnel_request_done();
+                continue;
+            }
+        }
+#endif
         if (uart_poll_in(art_uart, &ch) != 0) {
             k_msleep(1);
             continue;
