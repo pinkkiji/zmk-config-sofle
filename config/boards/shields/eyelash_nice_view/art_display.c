@@ -24,6 +24,7 @@ static lv_img_dsc_t frames[ART_MAX_FRAMES];
 static uint16_t nframes;
 static uint16_t cur;
 static K_SEM_DEFINE(reload_done, 0, 1);
+static bool art_paused;
 
 /* ---- 描画の記録 ---- */
 #define SPY_N 24
@@ -107,7 +108,7 @@ const struct art_header *eyelash_art_header(void) {
 
 /* 表示キュー上の時刻管理つきタイマー（LVGL のタイマーは転送中に遅れるため使わない） */
 static void anim_cb(struct k_work *work) {
-    if (nframes < 2 || !art_obj) {
+    if (nframes < 2 || !art_obj || art_paused) {
         return;
     }
     cur = (cur + 1) % nframes;
@@ -162,6 +163,16 @@ static void apply_work_cb(struct k_work *work) {
     k_sem_give(&reload_done);
 }
 static K_WORK_DEFINE(apply_work, apply_work_cb);
+
+void eyelash_art_pause(bool pause) {
+    art_paused = pause;
+    if (pause) {
+        k_work_cancel_delayable(&anim_work);
+    } else if (nframes > 1 && art_obj) {
+        anim_next_ms = k_uptime_get() + frame_ms(cur);
+        k_work_reschedule_for_queue(zmk_display_work_q(), &anim_work, K_MSEC(frame_ms(cur)));
+    }
+}
 
 void eyelash_art_attach(lv_obj_t *img) {
     k_work_init_delayable(&anim_work, anim_cb);

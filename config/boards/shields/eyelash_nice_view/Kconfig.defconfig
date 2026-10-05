@@ -54,6 +54,10 @@ endif
 config ZMK_DISPLAY_STATUS_SCREEN_BUILT_IN
     select LV_FONT_MONTSERRAT_26
 
+config EYELASH_SCREENSAVER
+    bool "Screensaver (full-screen stripes) while idle, to avoid burn-in"
+    default y
+
 config EYELASH_ZMK_USB_WIDGET
     bool "Use ZMK USB state in the right-hand widget (unused)"
     default n

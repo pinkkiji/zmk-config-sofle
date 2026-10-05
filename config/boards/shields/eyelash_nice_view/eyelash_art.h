@@ -42,6 +42,11 @@ const uint16_t *eyelash_art_durations(void);
 /* フラッシュ上の画像領域の先頭アドレス（メモリマップ） */
 uint32_t eyelash_art_flash_addr(void);
 
+/* スクリーンセーバー（screensaver.c）。表示スレッドから、画面の生成時に呼ぶ */
+void eyelash_screensaver_attach(lv_obj_t *screen);
+/* 画像のアニメを一時停止/再開（スクリーンセーバーの間は止める） */
+void eyelash_art_pause(bool pause);
+
 /* 描画の記録（LVGL → 画面ドライバーの転送1回ごと） */
 struct art_flush_rec {
     int16_t x1, y1, x2, y2;
