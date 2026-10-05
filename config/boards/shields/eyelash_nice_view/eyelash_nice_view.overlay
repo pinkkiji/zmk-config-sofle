@@ -1,0 +1,43 @@
+/*
+ * Copyright (c) 2022 The ZMK Contributors
+ *
+ * SPDX-License-Identifier: MIT
+ */
+
+&nice_view_spi {
+    status = "okay";
+    nice_view: ls0xx@0 {
+        compatible = "sharp,ls0xx";
+        spi-max-frequency = <1000000>;
+        reg = <0>;
+        width = <160>;
+        height = <68>;
+    };
+};
+
+/ {
+    chosen {
+        zephyr,display = &nice_view;
+    };
+};
+
+/* 右手のUSBシリアル（画像送信用）。zephyr_udc0 は eyelash_sofle の dtsi が定義 */
+&zephyr_udc0 {
+    art_cdc: art_cdc_acm_uart {
+        compatible = "zephyr,cdc-acm-uart";
+    };
+};
+
+/* コード領域を縮めて、画像専用の領域を作る（0xC0000-0xEC000 = 176KB）。ファーム更新では消えない */
+&code_partition {
+    reg = <0x00026000 0x0009a000>;
+};
+
+&flash0 {
+    partitions {
+        image_partition: partition@c0000 {
+            label = "image_partition";
+            reg = <0x000c0000 0x0002c000>;
+        };
+    };
+};
