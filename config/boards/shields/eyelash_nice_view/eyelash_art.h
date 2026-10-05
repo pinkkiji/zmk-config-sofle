@@ -67,3 +67,11 @@ void art_tunnel_request_done(void);
 void art_tunnel_send_response(uint8_t cmd, const uint8_t *p, uint16_t n);
 #endif
 #endif
+
+/* ---- 右手のファーム更新（art_update.c） ---- */
+#if !IS_ENABLED(CONFIG_ZMK_SPLIT_ROLE_CENTRAL)
+int art_update_begin(uint32_t size, uint32_t crc);
+int art_update_data(uint32_t off, const uint8_t *p, uint16_t n);
+int art_update_verify(void);
+void art_update_apply(void);
+#endif

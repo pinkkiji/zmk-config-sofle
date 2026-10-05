@@ -261,6 +261,35 @@ static void handle(uint8_t cmd, const uint8_t *p, uint16_t n) {
         break;
     }
 #endif
+#if !IS_ENABLED(CONFIG_ZMK_SPLIT_ROLE_CENTRAL)
+    case 'U': { /* ファーム更新の開始: [サイズ u32, CRC32 u32] */
+        if (n != 8) {
+            ack(cmd, ST_BAD_ARGS);
+            break;
+        }
+        int r = art_update_begin(rd32(p), rd32(p + 4));
+        ack(cmd, r == 0 ? ST_OK : (r == 1 ? ST_BAD_ARGS : ST_FLASH));
+        break;
+    }
+    case 'V': { /* ファーム更新のデータ: [位置 u32, 中身] */
+        if (n < 8) {
+            ack(cmd, ST_BAD_ARGS);
+            break;
+        }
+        int r = art_update_data(rd32(p), p + 4, n - 4);
+        ack(cmd, r == 0 ? ST_OK : (r == 1 ? ST_BAD_ARGS : ST_FLASH));
+        break;
+    }
+    case 'W': { /* ファーム更新の確定: チェックが合えば上書きして再起動 */
+        int r = art_update_verify();
+        ack(cmd, r == 0 ? ST_OK : (r == 3 ? ST_CRC : ST_STATE));
+        if (r == 0) {
+            k_msleep(1500); /* 応答が左手・PCに届くのを待つ */
+            art_update_apply();
+        }
+        break;
+    }
+#endif
     case 'R': {
         ack(cmd, ST_OK);
         k_msleep(100); /* 応答がホストに届くのを待つ */
