@@ -12,6 +12,9 @@
 #include <string.h>
 #include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
+#include <zephyr/bluetooth/bluetooth.h>
+#include <zephyr/bluetooth/conn.h>
+#include <zephyr/bluetooth/gatt.h>
 #include <zmk/event_manager.h>
 
 #include "eyelash_art.h"
@@ -28,9 +31,8 @@ LOG_MODULE_DECLARE(zmk, CONFIG_ZMK_LOG_LEVEL);
 #endif
 
 #define TUN_NAME "art"
-#define TUN_DATA_MAX ((int)MIN(CONFIG_ZMK_SPLIT_RELAY_EVENT_DATA_LEN, 15))
+#define TUN_DATA_MAX ((int)MIN(CONFIG_ZMK_SPLIT_RELAY_EVENT_DATA_LEN, 56))
 #define TUN_HDR 6
-#define TUN_CHUNK (TUN_DATA_MAX - TUN_HDR)
 #define TUN_MAX_PAYLOAD 520
 
 enum { T_REQ = 1, T_REQ_ACK = 2, T_RSP = 3, T_RSP_ACK = 4 };
@@ -39,9 +41,47 @@ enum { T_REQ = 1, T_REQ_ACK = 2, T_RSP = 3, T_RSP_ACK = 4 };
  * 0: 送ったパケット 1: 送信エラー数 2: 最後の送信エラー値 3: 受け取った要求/応答パケット
  * 4: 受け取った確認 5: 取り出した要求(右)/送った要求(左) 6: 処理した要求(右)/受け取った応答(左) 7: 受け取った全パケット */
 static uint32_t st[8];
-void art_tunnel_stats(uint32_t *out) { memcpy(out, st, sizeof(st)); }
+static uint32_t st_mtu;
+void art_tunnel_stats(uint32_t *out) {
+    memcpy(out, st, sizeof(st));
+    out[2] = (out[2] & 0xffff) | (st_mtu << 16);
+}
 
 BUILD_ASSERT(CONFIG_ZMK_SPLIT_RELAY_EVENT_DATA_LEN >= 15, "relay event data too small for art tunnel");
+
+
+/* ---- 無線の1回の大きさ(MTU)。ZMK は交渉しないので、左手が自分で交渉する ---- */
+static uint16_t cur_mtu;
+static void mtu_done_cb(struct bt_conn *c, uint8_t err, struct bt_gatt_exchange_params *p) {}
+static void mtu_conn_cb(struct bt_conn *c, void *u) {
+    struct bt_conn_info info;
+    if (bt_conn_get_info(c, &info) == 0 && info.state == BT_CONN_STATE_CONNECTED
+#if IS_ENABLED(CONFIG_ZMK_SPLIT_ROLE_CENTRAL)
+        && info.role == BT_CONN_ROLE_CENTRAL /* PC との接続は除く */
+#endif
+    ) {
+        cur_mtu = bt_gatt_get_mtu(c);
+#if IS_ENABLED(CONFIG_ZMK_SPLIT_ROLE_CENTRAL)
+        if (cur_mtu <= 23) {
+            static struct bt_gatt_exchange_params ep;
+            ep.func = mtu_done_cb;
+            bt_gatt_exchange_mtu(c, &ep);
+        }
+#endif
+    }
+}
+/* 1回に送れる event_data の大きさ。名前"art"(3)+ヘッダ(2)+ATT(3) を引く */
+static int tun_data_max(void) {
+    cur_mtu = 0;
+    bt_conn_foreach(BT_CONN_TYPE_LE, mtu_conn_cb, NULL);
+    st_mtu = cur_mtu;
+    int m = (int)cur_mtu - 3 - 2 - 3;
+    if (m < 15) {
+        m = 15;
+    }
+    return MIN(m, TUN_DATA_MAX);
+}
+#define TUN_CHUNK (tun_data_max() - TUN_HDR)
 
 static uint16_t rd16(const uint8_t *p) { return (uint16_t)(p[0] | (p[1] << 8)); }
 
