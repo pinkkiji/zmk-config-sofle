@@ -35,6 +35,12 @@ LOG_MODULE_DECLARE(zmk, CONFIG_ZMK_LOG_LEVEL);
 
 enum { T_REQ = 1, T_REQ_ACK = 2, T_RSP = 3, T_RSP_ACK = 4 };
 
+/* 診断用の数え上げ（S コマンドで読む）
+ * 0: 送ったパケット 1: 送信エラー数 2: 最後の送信エラー値 3: 受け取った要求/応答パケット
+ * 4: 受け取った確認 5: 取り出した要求(右)/送った要求(左) 6: 処理した要求(右)/受け取った応答(左) 7: 受け取った全パケット */
+static uint32_t st[8];
+void art_tunnel_stats(uint32_t *out) { memcpy(out, st, sizeof(st)); }
+
 BUILD_ASSERT(CONFIG_ZMK_SPLIT_RELAY_EVENT_DATA_LEN >= 24, "relay event data too small for art tunnel");
 
 static uint16_t rd16(const uint8_t *p) { return (uint16_t)(p[0] | (p[1] << 8)); }
@@ -57,7 +63,13 @@ static int tun_send(const uint8_t *d, uint8_t n) {
     pl.header.event_type_size = strlen(TUN_NAME);
     strcpy(pl.event_type, TUN_NAME);
     memcpy(pl.event_data, d, n);
-    return zmk_split_central_send_relay_event(&pl);
+    int r = zmk_split_central_send_relay_event(&pl);
+    st[0]++;
+    if (r) {
+        st[1]++;
+        st[2] = (uint32_t)r;
+    }
+    return r;
 }
 #else
 static int tun_send(const uint8_t *d, uint8_t n) {
@@ -67,7 +79,13 @@ static int tun_send(const uint8_t *d, uint8_t n) {
     pev.data.relay_event.header.event_data_size = n;
     strcpy(pev.data.relay_event.event_type, TUN_NAME);
     memcpy(pev.data.relay_event.event_data, d, n);
-    return zmk_split_peripheral_report_event(&pev);
+    int r = zmk_split_peripheral_report_event(&pev);
+    st[0]++;
+    if (r) {
+        st[1]++;
+        st[2] = (uint32_t)r;
+    }
+    return r;
 }
 #endif
 
@@ -82,13 +100,16 @@ static uint16_t rsp_total, rsp_got;
 static uint8_t rsp_cmd;
 
 static void central_on_packet(const uint8_t *d, size_t n) {
+    st[7]++;
     if (n < TUN_HDR) {
         return;
     }
     if (d[0] == T_REQ_ACK) {
+        st[4]++;
         last_ack_off = rd16(d + 4);
         k_sem_give(&req_ack_sem);
     } else if (d[0] == T_RSP) {
+        st[3]++;
         uint16_t total = rd16(d + 2);
         uint16_t off = rd16(d + 4);
         size_t len = n - TUN_HDR;
@@ -105,6 +126,7 @@ static void central_on_packet(const uint8_t *d, size_t n) {
         pack(ack, T_RSP_ACK, d[1], total, rsp_got);
         tun_send(ack, TUN_HDR);
         if (rsp_got == rsp_total && off + len == total) {
+            st[6]++;
             k_sem_give(&rsp_done_sem);
         }
     }
@@ -118,6 +140,7 @@ int art_tunnel_request(uint8_t cmd, const uint8_t *p, uint16_t n, uint8_t *out_c
     rsp_got = 0;
     rsp_total = 0;
 
+    st[5]++;
     uint16_t off = 0;
     do {
         uint16_t len = MIN((uint16_t)TUN_CHUNK, (uint16_t)(n - off));
@@ -160,10 +183,12 @@ static uint8_t req_cmd;
 static volatile bool req_ready;
 
 static void peripheral_on_packet(const uint8_t *d, size_t n) {
+    st[7]++;
     if (n < TUN_HDR) {
         return;
     }
     if (d[0] == T_REQ) {
+        st[3]++;
         uint16_t total = rd16(d + 2);
         uint16_t off = rd16(d + 4);
         size_t len = n - TUN_HDR;
@@ -183,6 +208,7 @@ static void peripheral_on_packet(const uint8_t *d, size_t n) {
             req_ready = true;
         }
     } else if (d[0] == T_RSP_ACK) {
+        st[4]++;
         last_rsp_ack_off = rd16(d + 4);
         k_sem_give(&rsp_ack_sem);
     }
@@ -196,10 +222,12 @@ bool art_tunnel_take_request(uint8_t *cmd, const uint8_t **p, uint16_t *n) {
     *cmd = req_cmd;
     *p = req_buf;
     *n = req_total;
+    st[5]++;
     return true;
 }
 
 void art_tunnel_request_done(void) {
+    st[6]++;
     req_got = 0;
     req_total = 0;
     req_ready = false;

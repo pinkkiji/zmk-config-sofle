@@ -55,6 +55,7 @@ void eyelash_art_timing(uint32_t *hidden_us, uint32_t *shown_us);
 
 /* ---- 左右の中継（art_tunnel.c） ---- */
 #if IS_ENABLED(CONFIG_ZMK_SPLIT_RELAY_EVENT)
+void art_tunnel_stats(uint32_t *out); /* 診断用: 8個の数え上げ */
 #if IS_ENABLED(CONFIG_ZMK_SPLIT_ROLE_CENTRAL)
 /* 左手: 右手へ命令を送って応答を待つ。0=成功 1=右手に届かない 2=時間切れ */
 int art_tunnel_request(uint8_t cmd, const uint8_t *p, uint16_t n, uint8_t *out_cmd, uint8_t *out,

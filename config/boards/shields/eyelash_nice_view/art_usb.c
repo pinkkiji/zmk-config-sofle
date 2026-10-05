@@ -251,6 +251,16 @@ static void handle(uint8_t cmd, const uint8_t *p, uint16_t n) {
         break;
     }
 #endif
+#if IS_ENABLED(CONFIG_ZMK_SPLIT_RELAY_EVENT)
+    case 'S': { /* 中継の診断: 8個のu32 */
+        uint32_t v[8];
+        art_tunnel_stats(v);
+        uint8_t b[32];
+        memcpy(b, v, sizeof(b));
+        send('s', b, sizeof(b));
+        break;
+    }
+#endif
     case 'R': {
         ack(cmd, ST_OK);
         k_msleep(100); /* 応答がホストに届くのを待つ */
