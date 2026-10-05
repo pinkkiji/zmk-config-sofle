@@ -3,7 +3,7 @@
  * フレーム: 'E' 'S' cmd len(2,LE) payload crc16(2,LE)
  *   crc16 は cmd..payload が対象。CCITT 0x1021、初期値 0xFFFF、MSB先頭
  * 応答は cmd='a' payload=[元のcmd, 状態]。ping は cmd='p'。
- * コマンド: P=ping B=開始 D=データ E=確定 C=消去 L=描画の記録 R=ブートローダーへ再起動
+ * コマンド: P=ping B=開始 D=データ E=確定 G=読み出し C=消去 L=描画の記録 R=ブートローダーへ再起動
  * SPDX-License-Identifier: MIT
  */
 #include <string.h>
@@ -202,6 +202,25 @@ static void handle(uint8_t cmd, const uint8_t *p, uint16_t n) {
         }
         eyelash_art_reload_sync();
         ack(cmd, ST_OK);
+        break;
+    }
+    case 'G': { /* 保存してある画像領域を読む: [位置 u32, 長さ u16(最大512)] → 'g' [中身] */
+        if (n != 6) {
+            ack(cmd, ST_BAD_ARGS);
+            break;
+        }
+        uint32_t off = rd32(p);
+        uint16_t len = rd16(p + 4);
+        static uint8_t gbuf[512];
+        if (len == 0 || len > sizeof(gbuf) || off + len > ART_PART_SIZE) {
+            ack(cmd, ST_BAD_ARGS);
+            break;
+        }
+        if (flash_area_read(fa, off, gbuf, len) != 0) {
+            ack(cmd, ST_FLASH);
+            break;
+        }
+        send('g', gbuf, len);
         break;
     }
     case 'C': {
