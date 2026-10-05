@@ -18,7 +18,7 @@
 #define SS_H 68
 #define SS_ROW (SS_W / 8)
 #define SS_BYTES (8 + SS_ROW * SS_H)
-#define SS_TICK_MS 200
+#define SS_TICK_MS 100 /* 1秒に10回 */
 #define SS_STRIPE 8 /* しまの幅（画素） */
 #define SS_STEP 2   /* 1回で流れる量（画素） */
 
