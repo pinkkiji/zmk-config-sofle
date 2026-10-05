@@ -11,7 +11,7 @@ jobs:
 
   publish:
     needs: build
-    if: github.ref == 'refs/heads/seller-fw-art'
+    if: github.ref == 'refs/heads/seller-fw-art' || github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     permissions:
       contents: write
