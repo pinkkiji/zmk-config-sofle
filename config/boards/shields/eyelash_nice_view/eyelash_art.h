@@ -5,13 +5,11 @@
 #include <stdint.h>
 #include <stdbool.h>
 
-/* 内部(横向き)の画像の大きさ。縦画面で見ると 68 x ART_W。
- * 右手(子機) 140、左手(親機) 119（左は下のレイヤー名と上のバッテリー表示を残すため） */
+/* 内部(横向き)の画像の大きさ。縦画面で見ると 68 x 140。左右で同じ */
+#define ART_W 140
 #if IS_ENABLED(CONFIG_ZMK_SPLIT_ROLE_CENTRAL)
-#define ART_W 119
 #define ART_SIDE_LEFT 1
 #else
-#define ART_W 140
 #define ART_SIDE_LEFT 0
 #endif
 #define ART_H 68
