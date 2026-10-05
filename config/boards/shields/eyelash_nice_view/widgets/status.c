@@ -86,30 +86,42 @@ static void draw_top(lv_obj_t *widget, lv_color_t cbuf[], const struct status_st
  * 見たままの向きで小さな領域に描き、画面の向き（内部は横向き）に合わせて回して貼る。
  * 見たままの (u,v) の点は、内部では (x = H-1-v, y = u) になる。 */
 #define LBL_W 24 /* 見たままの幅 */
-#define LBL_H 16 /* 見たままの高さ */
+#define LBL_H 18 /* 見たままの高さ（縁取りの分、少し余裕を持たせる） */
+#define LBL_PX LV_IMG_PX_SIZE_ALPHA_BYTE /* アルファ付きの1画素のバイト数 */
 static lv_obj_t *lbl_tmp;
-static lv_color_t lbl_tmp_buf[LBL_W * LBL_H];
+static uint8_t lbl_tmp_buf[LV_CANVAS_BUF_SIZE_TRUE_COLOR_ALPHA(LBL_W, LBL_H)] __aligned(4);
 static lv_obj_t *lbl_l;
-static lv_color_t lbl_l_buf[LBL_W * LBL_H];
+static uint8_t lbl_l_buf[LV_CANVAS_BUF_SIZE_TRUE_COLOR_ALPHA(LBL_H, LBL_W)] __aligned(4);
 static lv_obj_t *lbl_c;
-static lv_color_t lbl_c_buf[LBL_W * LBL_H];
+static uint8_t lbl_c_buf[LV_CANVAS_BUF_SIZE_TRUE_COLOR_ALPHA(LBL_H, LBL_W)] __aligned(4);
+
+static uint8_t *dest_buf(lv_obj_t *canvas) { return canvas == lbl_l ? lbl_l_buf : lbl_c_buf; }
 
 static void draw_label(lv_obj_t *dest, const char *text) {
     if (!lbl_tmp || !dest) {
         return;
     }
-    lv_draw_rect_dsc_t bg_dsc;
-    init_rect_dsc(&bg_dsc, LVGL_BACKGROUND);
+    lv_draw_label_dsc_t halo_dsc;
+    init_label_dsc(&halo_dsc, LVGL_BACKGROUND, &lv_font_montserrat_14, LV_TEXT_ALIGN_CENTER);
     lv_draw_label_dsc_t txt_dsc;
     init_label_dsc(&txt_dsc, LVGL_FOREGROUND, &lv_font_montserrat_14, LV_TEXT_ALIGN_CENTER);
 
-    /* 背景は白（クロマキー色）。白い部分は透明になり、黒い文字だけが画像に重なる */
-    lv_canvas_draw_rect(lbl_tmp, 0, 0, LBL_W, LBL_H, &bg_dsc);
-    lv_canvas_draw_text(lbl_tmp, 0, 0, LBL_W, &txt_dsc, text);
+    /* 背景は透明。まわりに反対色の縁取りを描いてから、文字を重ねる */
+    lv_canvas_fill_bg(lbl_tmp, LVGL_BACKGROUND, LV_OPA_TRANSP);
+    static const int8_t off[8][2] = {{-1, 0}, {1, 0}, {0, -1}, {0, 1}, {-1, -1}, {1, -1}, {-1, 1}, {1, 1}};
+    for (int i = 0; i < 8; i++) {
+        lv_canvas_draw_text(lbl_tmp, off[i][0], 1 + off[i][1], LBL_W, &halo_dsc, text);
+    }
+    lv_canvas_draw_text(lbl_tmp, 0, 1, LBL_W, &txt_dsc, text);
 
+    /* 見たままの (u,v) -> 内部の (x = LBL_H-1-v, y = u)。画素を丸ごと(色+アルファ)コピー */
     for (int v = 0; v < LBL_H; v++) {
         for (int u = 0; u < LBL_W; u++) {
-            lv_canvas_set_px_color(dest, (LBL_H - 1) - v, u, lv_canvas_get_px(lbl_tmp, u, v));
+            const uint8_t *src = &lbl_tmp_buf[((size_t)v * LBL_W + u) * LBL_PX];
+            uint8_t *dst = &((uint8_t *)dest_buf(dest))[((size_t)u * LBL_H + ((LBL_H - 1) - v)) * LBL_PX];
+            for (int k = 0; k < LBL_PX; k++) {
+                dst[k] = src[k];
+            }
         }
     }
     lv_obj_invalidate(dest);
@@ -277,13 +289,13 @@ int zmk_widget_status_init(struct zmk_widget_status *widget, lv_obj_t *parent) {
     /* 画像の左上(L)・右上(C)に重ねる番号。見たままの上端(Y=17)に接する。
      * 内部の座標: x = 160 - 17 - LBL_H = 127, y = 見たままの左端(X) */
     lbl_tmp = lv_canvas_create(widget->obj);
-    lv_canvas_set_buffer(lbl_tmp, lbl_tmp_buf, LBL_W, LBL_H, LV_IMG_CF_TRUE_COLOR);
+    lv_canvas_set_buffer(lbl_tmp, lbl_tmp_buf, LBL_W, LBL_H, LV_IMG_CF_TRUE_COLOR_ALPHA);
     lv_obj_add_flag(lbl_tmp, LV_OBJ_FLAG_HIDDEN);
     lbl_l = lv_canvas_create(widget->obj);
-    lv_canvas_set_buffer(lbl_l, lbl_l_buf, LBL_H, LBL_W, LV_IMG_CF_TRUE_COLOR_CHROMA_KEYED);
+    lv_canvas_set_buffer(lbl_l, lbl_l_buf, LBL_H, LBL_W, LV_IMG_CF_TRUE_COLOR_ALPHA);
     lv_obj_align(lbl_l, LV_ALIGN_TOP_LEFT, 160 - 17 - LBL_H, 0);
     lbl_c = lv_canvas_create(widget->obj);
-    lv_canvas_set_buffer(lbl_c, lbl_c_buf, LBL_H, LBL_W, LV_IMG_CF_TRUE_COLOR_CHROMA_KEYED);
+    lv_canvas_set_buffer(lbl_c, lbl_c_buf, LBL_H, LBL_W, LV_IMG_CF_TRUE_COLOR_ALPHA);
     lv_obj_align(lbl_c, LV_ALIGN_TOP_LEFT, 160 - 17 - LBL_H, 68 - LBL_W);
 
     /* 切り替えの大きな表示（画面の中央。内部の x=45..112）。普段は隠す */
