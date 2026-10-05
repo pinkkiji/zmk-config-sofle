@@ -98,15 +98,13 @@ static void draw_label(lv_obj_t *dest, const char *text) {
     if (!lbl_tmp || !dest) {
         return;
     }
-    lv_draw_rect_dsc_t fg_dsc;
-    init_rect_dsc(&fg_dsc, LVGL_FOREGROUND);
     lv_draw_rect_dsc_t bg_dsc;
     init_rect_dsc(&bg_dsc, LVGL_BACKGROUND);
     lv_draw_label_dsc_t txt_dsc;
     init_label_dsc(&txt_dsc, LVGL_FOREGROUND, &lv_font_montserrat_14, LV_TEXT_ALIGN_CENTER);
 
-    lv_canvas_draw_rect(lbl_tmp, 0, 0, LBL_W, LBL_H, &fg_dsc); // 枠
-    lv_canvas_draw_rect(lbl_tmp, 1, 1, LBL_W - 2, LBL_H - 2, &bg_dsc);
+    /* 背景は白（クロマキー色）。白い部分は透明になり、黒い文字だけが画像に重なる */
+    lv_canvas_draw_rect(lbl_tmp, 0, 0, LBL_W, LBL_H, &bg_dsc);
     lv_canvas_draw_text(lbl_tmp, 0, 0, LBL_W, &txt_dsc, text);
 
     for (int v = 0; v < LBL_H; v++) {
@@ -282,10 +280,10 @@ int zmk_widget_status_init(struct zmk_widget_status *widget, lv_obj_t *parent) {
     lv_canvas_set_buffer(lbl_tmp, lbl_tmp_buf, LBL_W, LBL_H, LV_IMG_CF_TRUE_COLOR);
     lv_obj_add_flag(lbl_tmp, LV_OBJ_FLAG_HIDDEN);
     lbl_l = lv_canvas_create(widget->obj);
-    lv_canvas_set_buffer(lbl_l, lbl_l_buf, LBL_H, LBL_W, LV_IMG_CF_TRUE_COLOR);
+    lv_canvas_set_buffer(lbl_l, lbl_l_buf, LBL_H, LBL_W, LV_IMG_CF_TRUE_COLOR_CHROMA_KEYED);
     lv_obj_align(lbl_l, LV_ALIGN_TOP_LEFT, 160 - 17 - LBL_H, 0);
     lbl_c = lv_canvas_create(widget->obj);
-    lv_canvas_set_buffer(lbl_c, lbl_c_buf, LBL_H, LBL_W, LV_IMG_CF_TRUE_COLOR);
+    lv_canvas_set_buffer(lbl_c, lbl_c_buf, LBL_H, LBL_W, LV_IMG_CF_TRUE_COLOR_CHROMA_KEYED);
     lv_obj_align(lbl_c, LV_ALIGN_TOP_LEFT, 160 - 17 - LBL_H, 68 - LBL_W);
 
     /* 切り替えの大きな表示（画面の中央。内部の x=45..112）。普段は隠す */
