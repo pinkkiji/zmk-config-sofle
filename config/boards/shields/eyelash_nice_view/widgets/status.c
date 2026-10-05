@@ -1,7 +1,7 @@
 /*
  * 左手(親機)の画面。nice!view の標準表示を作り変えたもの。
- *   上の行 : 左に L<レイヤー番号>、中央にバッテリー、右に C<接続先> （USB のときは USB の記号）
- *   その下 : 画像（右手と同じ 68x140）
+ *   上の行 : バッテリーと接続の記号（標準どおり）
+ *   その下 : 画像（右手と同じ 68x140）。画像の左上に L<レイヤー番号>、右上に C<接続先> を重ねる
  *   切り替えたとき: 画面の中央に、番号を大きく、約1.5秒出す
  * Copyright (c) 2025 The ZMK Contributors
  * SPDX-License-Identifier: MIT
@@ -41,14 +41,10 @@ struct layer_status_state {
     const char *label;
 };
 
-/* ---- 上の行 ---- */
+/* ---- 上の行（標準どおり: 左にバッテリー、右に接続の記号） ---- */
 static void draw_top(lv_obj_t *widget, lv_color_t cbuf[], const struct status_state *state) {
     lv_obj_t *canvas = lv_obj_get_child(widget, 0);
 
-    lv_draw_label_dsc_t small_dsc;
-    init_label_dsc(&small_dsc, LVGL_FOREGROUND, &lv_font_montserrat_14, LV_TEXT_ALIGN_LEFT);
-    lv_draw_label_dsc_t right_dsc;
-    init_label_dsc(&right_dsc, LVGL_FOREGROUND, &lv_font_montserrat_14, LV_TEXT_ALIGN_RIGHT);
     lv_draw_label_dsc_t icon_dsc;
     init_label_dsc(&icon_dsc, LVGL_FOREGROUND, &lv_font_montserrat_16, LV_TEXT_ALIGN_RIGHT);
     lv_draw_rect_dsc_t rect_black_dsc;
@@ -57,25 +53,68 @@ static void draw_top(lv_obj_t *widget, lv_color_t cbuf[], const struct status_st
     // Fill background
     lv_canvas_draw_rect(canvas, 0, 0, CANVAS_SIZE, CANVAS_SIZE, &rect_black_dsc);
 
-    // 左: レイヤー番号
-    char layer_text[8];
-    snprintf(layer_text, sizeof(layer_text), "L%d", (int)state->layer_index);
-    lv_canvas_draw_text(canvas, 0, 1, 22, &small_dsc, layer_text);
+    // Draw battery
+    draw_battery(canvas, state);
 
-    // 中央: バッテリー
-    draw_battery_x(canvas, state, 18);
+    // Draw output status
+    char output_text[10] = {};
 
-    // 右: 接続先（USB のときは USB の記号）
-    if (state->selected_endpoint.transport == ZMK_TRANSPORT_USB) {
-        lv_canvas_draw_text(canvas, 0, 0, CANVAS_SIZE, &icon_dsc, LV_SYMBOL_USB);
-    } else {
-        char out_text[8];
-        snprintf(out_text, sizeof(out_text), "C%d", state->active_profile_index + 1);
-        lv_canvas_draw_text(canvas, 0, 1, CANVAS_SIZE, &right_dsc, out_text);
+    switch (state->selected_endpoint.transport) {
+    case ZMK_TRANSPORT_USB:
+        strcat(output_text, LV_SYMBOL_USB);
+        break;
+    case ZMK_TRANSPORT_BLE:
+        if (state->active_profile_bonded) {
+            if (state->active_profile_connected) {
+                strcat(output_text, LV_SYMBOL_WIFI);
+            } else {
+                strcat(output_text, LV_SYMBOL_CLOSE);
+            }
+        } else {
+            strcat(output_text, LV_SYMBOL_SETTINGS);
+        }
+        break;
     }
+
+    lv_canvas_draw_text(canvas, 0, 0, CANVAS_SIZE, &icon_dsc, output_text);
 
     // Rotate canvas
     rotate_canvas(canvas, cbuf);
+}
+
+/* ---- 画像の左上(L)・右上(C)に重ねる小さな番号 ----
+ * 見たままの向きで小さな領域に描き、画面の向き（内部は横向き）に合わせて回して貼る。
+ * 見たままの (u,v) の点は、内部では (x = H-1-v, y = u) になる。 */
+#define LBL_W 24 /* 見たままの幅 */
+#define LBL_H 16 /* 見たままの高さ */
+static lv_obj_t *lbl_tmp;
+static lv_color_t lbl_tmp_buf[LBL_W * LBL_H];
+static lv_obj_t *lbl_l;
+static lv_color_t lbl_l_buf[LBL_W * LBL_H];
+static lv_obj_t *lbl_c;
+static lv_color_t lbl_c_buf[LBL_W * LBL_H];
+
+static void draw_label(lv_obj_t *dest, const char *text) {
+    if (!lbl_tmp || !dest) {
+        return;
+    }
+    lv_draw_rect_dsc_t fg_dsc;
+    init_rect_dsc(&fg_dsc, LVGL_FOREGROUND);
+    lv_draw_rect_dsc_t bg_dsc;
+    init_rect_dsc(&bg_dsc, LVGL_BACKGROUND);
+    lv_draw_label_dsc_t txt_dsc;
+    init_label_dsc(&txt_dsc, LVGL_FOREGROUND, &lv_font_montserrat_14, LV_TEXT_ALIGN_CENTER);
+
+    lv_canvas_draw_rect(lbl_tmp, 0, 0, LBL_W, LBL_H, &fg_dsc); // 枠
+    lv_canvas_draw_rect(lbl_tmp, 1, 1, LBL_W - 2, LBL_H - 2, &bg_dsc);
+    lv_canvas_draw_text(lbl_tmp, 0, 0, LBL_W, &txt_dsc, text);
+
+    for (int v = 0; v < LBL_H; v++) {
+        for (int u = 0; u < LBL_W; u++) {
+            lv_canvas_set_px_color(dest, (LBL_H - 1) - v, u, lv_canvas_get_px(lbl_tmp, u, v));
+        }
+    }
+    lv_obj_invalidate(dest);
 }
 
 /* ---- 切り替えたときの大きな表示 ---- */
@@ -156,9 +195,10 @@ static void set_output_status(struct zmk_widget_status *widget,
 
     draw_top(widget->obj, widget->cbuf, &widget->state);
 
+    char t[8];
+    snprintf(t, sizeof(t), "C%d", state->active_profile_index + 1);
+    draw_label(lbl_c, t);
     if (popup_last_profile >= 0 && state->active_profile_index != popup_last_profile) {
-        char t[8];
-        snprintf(t, sizeof(t), "C%d", state->active_profile_index + 1);
         popup_show(widget, t);
     }
     popup_last_profile = state->active_profile_index;
@@ -196,9 +236,10 @@ static void set_layer_status(struct zmk_widget_status *widget, struct layer_stat
 
     draw_top(widget->obj, widget->cbuf, &widget->state);
 
+    char t[8];
+    snprintf(t, sizeof(t), "L%d", (int)state.index);
+    draw_label(lbl_l, t);
     if (popup_last_layer >= 0 && (int)state.index != popup_last_layer) {
-        char t[8];
-        snprintf(t, sizeof(t), "L%d", (int)state.index);
         popup_show(widget, t);
     }
     popup_last_layer = (int)state.index;
@@ -234,6 +275,18 @@ int zmk_widget_status_init(struct zmk_widget_status *widget, lv_obj_t *parent) {
     lv_obj_t *art = lv_img_create(widget->obj);
     eyelash_art_attach(art);
     lv_obj_align(art, LV_ALIGN_TOP_LEFT, 3, 0);
+
+    /* 画像の左上(L)・右上(C)に重ねる番号。見たままの上端(Y=17)に接する。
+     * 内部の座標: x = 160 - 17 - LBL_H = 127, y = 見たままの左端(X) */
+    lbl_tmp = lv_canvas_create(widget->obj);
+    lv_canvas_set_buffer(lbl_tmp, lbl_tmp_buf, LBL_W, LBL_H, LV_IMG_CF_TRUE_COLOR);
+    lv_obj_add_flag(lbl_tmp, LV_OBJ_FLAG_HIDDEN);
+    lbl_l = lv_canvas_create(widget->obj);
+    lv_canvas_set_buffer(lbl_l, lbl_l_buf, LBL_H, LBL_W, LV_IMG_CF_TRUE_COLOR);
+    lv_obj_align(lbl_l, LV_ALIGN_TOP_LEFT, 160 - 17 - LBL_H, 0);
+    lbl_c = lv_canvas_create(widget->obj);
+    lv_canvas_set_buffer(lbl_c, lbl_c_buf, LBL_H, LBL_W, LV_IMG_CF_TRUE_COLOR);
+    lv_obj_align(lbl_c, LV_ALIGN_TOP_LEFT, 160 - 17 - LBL_H, 68 - LBL_W);
 
     /* 切り替えの大きな表示（画面の中央。内部の x=45..112）。普段は隠す */
     lv_obj_t *popup = lv_canvas_create(widget->obj);
