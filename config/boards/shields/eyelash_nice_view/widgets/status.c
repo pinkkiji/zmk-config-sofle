@@ -7,6 +7,7 @@
  * SPDX-License-Identifier: MIT
  */
 
+#include <string.h>
 #include <zephyr/kernel.h>
 
 #include <zephyr/logging/log.h>
@@ -82,40 +83,88 @@ static void draw_top(lv_obj_t *widget, lv_color_t cbuf[], const struct status_st
     rotate_canvas(canvas, cbuf);
 }
 
-/* ---- 画像の左上(L)・右上(C)に重ねる小さな番号 ----
- * 見たままの向きで小さな領域に描き、画面の向き（内部は横向き）に合わせて回して貼る。
- * 見たままの (u,v) の点は、内部では (x = H-1-v, y = u) になる。 */
+/* ---- 画像の左上(L)・右上(C)に重ねる小さな番号（黒い文字・白い縁・背景は透明） ----
+ * 見たままの向きで小さな領域に文字を描き、その形から、内部(横向き)の2ビット画像を作る。
+ * パレットで透明(0)・縁(1)・文字(2)を持つ。標準のバッテリーの稲妻と同じ方式。
+ * この画面では描画の黒が明るく、描画の白が暗く見える。縁=描画の黒(明るい)、文字=描画の白(暗い)。
+ * 見たままの (u,v) -> 内部の (x = LBL_H-1-v, y = u) */
 #define LBL_W 24 /* 見たままの幅 */
-#define LBL_H 16 /* 見たままの高さ */
+#define LBL_H 18 /* 見たままの高さ（縁取りの余白を含む） */
+#define LBL_NW LBL_H
+#define LBL_NH LBL_W
+#define LBL_ROW_BYTES ((LBL_NW * 2 + 7) / 8)
+#define LBL_DATA_SIZE (16 + LBL_ROW_BYTES * LBL_NH)
 static lv_obj_t *lbl_tmp;
 static lv_color_t lbl_tmp_buf[LBL_W * LBL_H];
-static lv_obj_t *lbl_l;
-static lv_color_t lbl_l_buf[LBL_W * LBL_H];
-static lv_obj_t *lbl_c;
-static lv_color_t lbl_c_buf[LBL_W * LBL_H];
+static uint8_t lbl_l_data[LBL_DATA_SIZE] __aligned(4);
+static uint8_t lbl_c_data[LBL_DATA_SIZE] __aligned(4);
+static lv_img_dsc_t lbl_l_dsc;
+static lv_img_dsc_t lbl_c_dsc;
+static lv_obj_t *lbl_l_img;
+static lv_obj_t *lbl_c_img;
 
-static void draw_label(lv_obj_t *dest, const char *text) {
-    if (!lbl_tmp || !dest) {
+static void draw_label(lv_img_dsc_t *dsc, uint8_t *data, lv_obj_t *img, const char *text) {
+    if (!lbl_tmp || !img) {
         return;
     }
-    /* クロマキーの色は、設定で「描画の黒」にしてある（CONFIG_LV_COLOR_CHROMA_KEY_HEX=0）。
-     * 背景を描画の黒で塗ると透明になり、描画の白で描いた文字だけが残る。
-     * この画面では描画の白は、実機で暗く見える */
-    lv_draw_rect_dsc_t clear_dsc;
-    init_rect_dsc(&clear_dsc, LVGL_FOREGROUND); /* 描画の黒 = 透明 */
+    /* 1. 白地に黒で文字を描く（形を取るためだけ） */
+    lv_draw_rect_dsc_t bg_dsc;
+    init_rect_dsc(&bg_dsc, LVGL_BACKGROUND);
     lv_draw_label_dsc_t txt_dsc;
-    init_label_dsc(&txt_dsc, LVGL_BACKGROUND, &lv_font_montserrat_14, LV_TEXT_ALIGN_CENTER);
+    init_label_dsc(&txt_dsc, LVGL_FOREGROUND, &lv_font_montserrat_14, LV_TEXT_ALIGN_CENTER);
+    lv_canvas_draw_rect(lbl_tmp, 0, 0, LBL_W, LBL_H, &bg_dsc);
+    lv_canvas_draw_text(lbl_tmp, 0, 1, LBL_W, &txt_dsc, text);
 
-    lv_canvas_draw_rect(lbl_tmp, 0, 0, LBL_W, LBL_H, &clear_dsc);
-    lv_canvas_draw_text(lbl_tmp, 0, 0, LBL_W, &txt_dsc, text);
-
-    /* 見たままの (u,v) -> 内部の (x = LBL_H-1-v, y = u) */
+    /* 2. 文字の形を取り出す */
+    static uint8_t mask[LBL_W * LBL_H];
     for (int v = 0; v < LBL_H; v++) {
         for (int u = 0; u < LBL_W; u++) {
-            lv_canvas_set_px_color(dest, (LBL_H - 1) - v, u, lv_canvas_get_px(lbl_tmp, u, v));
+            mask[v * LBL_W + u] = lv_color_brightness(lv_canvas_get_px(lbl_tmp, u, v)) < 128 ? 1 : 0;
         }
     }
-    lv_obj_invalidate(dest);
+
+    /* 3. パレット（B,G,R,A）+ 2ビット画像 */
+    memset(data, 0, LBL_DATA_SIZE);
+    const uint8_t pal[16] = {
+        0x00, 0x00, 0x00, 0x00, /* 0: 透明 */
+        0x00, 0x00, 0x00, 0xff, /* 1: 縁 = 描画の黒（実機で明るい） */
+        0xff, 0xff, 0xff, 0xff, /* 2: 文字 = 描画の白（実機で暗い） */
+        0x00, 0x00, 0x00, 0x00, /* 3: 未使用 */
+    };
+    memcpy(data, pal, sizeof(pal));
+    for (int v = 0; v < LBL_H; v++) {
+        for (int u = 0; u < LBL_W; u++) {
+            int val = 0;
+            if (mask[v * LBL_W + u]) {
+                val = 2;
+            } else {
+                for (int dv = -1; dv <= 1 && !val; dv++) {
+                    for (int du = -1; du <= 1; du++) {
+                        int vv = v + dv, uu = u + du;
+                        if (vv >= 0 && vv < LBL_H && uu >= 0 && uu < LBL_W && mask[vv * LBL_W + uu]) {
+                            val = 1;
+                            break;
+                        }
+                    }
+                }
+            }
+            if (val) {
+                int x = (LBL_H - 1) - v;
+                int y = u;
+                data[16 + y * LBL_ROW_BYTES + (x >> 2)] |= (uint8_t)(val << (6 - 2 * (x & 3)));
+            }
+        }
+    }
+
+    dsc->header.cf = LV_IMG_CF_INDEXED_2BIT;
+    dsc->header.always_zero = 0;
+    dsc->header.reserved = 0;
+    dsc->header.w = LBL_NW;
+    dsc->header.h = LBL_NH;
+    dsc->data_size = LBL_DATA_SIZE;
+    dsc->data = data;
+    lv_img_set_src(img, dsc);
+    lv_obj_invalidate(img);
 }
 
 /* ---- 切り替えたときの大きな表示 ---- */
@@ -198,7 +247,7 @@ static void set_output_status(struct zmk_widget_status *widget,
 
     char t[8];
     snprintf(t, sizeof(t), "C%d", state->active_profile_index + 1);
-    draw_label(lbl_c, t);
+    draw_label(&lbl_c_dsc, lbl_c_data, lbl_c_img, t);
     if (popup_last_profile >= 0 && state->active_profile_index != popup_last_profile) {
         popup_show(widget, t);
     }
@@ -239,7 +288,7 @@ static void set_layer_status(struct zmk_widget_status *widget, struct layer_stat
 
     char t[8];
     snprintf(t, sizeof(t), "L%d", (int)state.index);
-    draw_label(lbl_l, t);
+    draw_label(&lbl_l_dsc, lbl_l_data, lbl_l_img, t);
     if (popup_last_layer >= 0 && (int)state.index != popup_last_layer) {
         popup_show(widget, t);
     }
@@ -278,16 +327,14 @@ int zmk_widget_status_init(struct zmk_widget_status *widget, lv_obj_t *parent) {
     lv_obj_align(art, LV_ALIGN_TOP_LEFT, 3, 0);
 
     /* 画像の左上(L)・右上(C)に重ねる番号。見たままの上端(Y=17)に接する。
-     * 内部の座標: x = 160 - 17 - LBL_H = 127, y = 見たままの左端(X) */
+     * 内部の座標: x = 160 - 17 - LBL_H, y = 見たままの左端(X) */
     lbl_tmp = lv_canvas_create(widget->obj);
     lv_canvas_set_buffer(lbl_tmp, lbl_tmp_buf, LBL_W, LBL_H, LV_IMG_CF_TRUE_COLOR);
     lv_obj_add_flag(lbl_tmp, LV_OBJ_FLAG_HIDDEN);
-    lbl_l = lv_canvas_create(widget->obj);
-    lv_canvas_set_buffer(lbl_l, lbl_l_buf, LBL_H, LBL_W, LV_IMG_CF_TRUE_COLOR_CHROMA_KEYED);
-    lv_obj_align(lbl_l, LV_ALIGN_TOP_LEFT, 160 - 17 - LBL_H, 0);
-    lbl_c = lv_canvas_create(widget->obj);
-    lv_canvas_set_buffer(lbl_c, lbl_c_buf, LBL_H, LBL_W, LV_IMG_CF_TRUE_COLOR_CHROMA_KEYED);
-    lv_obj_align(lbl_c, LV_ALIGN_TOP_LEFT, 160 - 17 - LBL_H, 68 - LBL_W);
+    lbl_l_img = lv_img_create(widget->obj);
+    lv_obj_align(lbl_l_img, LV_ALIGN_TOP_LEFT, 160 - 17 - LBL_H, 0);
+    lbl_c_img = lv_img_create(widget->obj);
+    lv_obj_align(lbl_c_img, LV_ALIGN_TOP_LEFT, 160 - 17 - LBL_H, 68 - LBL_W);
 
     /* 切り替えの大きな表示（画面の中央。内部の x=45..112）。普段は隠す */
     lv_obj_t *popup = lv_canvas_create(widget->obj);
