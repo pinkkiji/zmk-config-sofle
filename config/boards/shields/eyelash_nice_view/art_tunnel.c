@@ -28,7 +28,7 @@ LOG_MODULE_DECLARE(zmk, CONFIG_ZMK_LOG_LEVEL);
 #endif
 
 #define TUN_NAME "art"
-#define TUN_DATA_MAX ((int)MIN(CONFIG_ZMK_SPLIT_RELAY_EVENT_DATA_LEN, 56))
+#define TUN_DATA_MAX ((int)MIN(CONFIG_ZMK_SPLIT_RELAY_EVENT_DATA_LEN, 15))
 #define TUN_HDR 6
 #define TUN_CHUNK (TUN_DATA_MAX - TUN_HDR)
 #define TUN_MAX_PAYLOAD 520
@@ -41,7 +41,7 @@ enum { T_REQ = 1, T_REQ_ACK = 2, T_RSP = 3, T_RSP_ACK = 4 };
 static uint32_t st[8];
 void art_tunnel_stats(uint32_t *out) { memcpy(out, st, sizeof(st)); }
 
-BUILD_ASSERT(CONFIG_ZMK_SPLIT_RELAY_EVENT_DATA_LEN >= 24, "relay event data too small for art tunnel");
+BUILD_ASSERT(CONFIG_ZMK_SPLIT_RELAY_EVENT_DATA_LEN >= 15, "relay event data too small for art tunnel");
 
 static uint16_t rd16(const uint8_t *p) { return (uint16_t)(p[0] | (p[1] << 8)); }
 
