@@ -42,6 +42,17 @@ const uint16_t *eyelash_art_durations(void);
 /* フラッシュ上の画像領域の先頭アドレス（メモリマップ） */
 uint32_t eyelash_art_flash_addr(void);
 
+/* 無線の接続の記録（ble_log.c）: 16 バイトの記録 */
+struct art_ble_ev {
+    uint32_t t_ms; /* 起動からの時間 */
+    uint8_t type;  /* 1=つながった(p1=エラー p2=間隔 p3=時間切れ) 2=切れた(p1=理由) 3=暗号化(p1=レベル p2=エラー) 4=設定の変更(p1=間隔 p2=見送り p3=時間切れ) */
+    uint8_t role;  /* 0=中央（こちらがつなぎに行った） 1=周辺機器（相手が来た） */
+    uint16_t peer; /* 相手のアドレスの下位2バイト */
+    uint16_t p1, p2, p3;
+    uint16_t pad;
+} __packed;
+size_t eyelash_ble_log_read(uint8_t *out, size_t max);
+
 /* 本体の設定（art_cfg.c）: 通信でそのまま読み書きする 12 バイト */
 struct art_cfg {
     uint8_t ver;       /* 1 */

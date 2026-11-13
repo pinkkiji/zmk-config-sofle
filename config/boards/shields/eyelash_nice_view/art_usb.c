@@ -3,7 +3,7 @@
  * フレーム: 'E' 'S' cmd len(2,LE) payload crc16(2,LE)
  *   crc16 は cmd..payload が対象。CCITT 0x1021、初期値 0xFFFF、MSB先頭
  * 応答は cmd='a' payload=[元のcmd, 状態]。ping は cmd='p'。
- * コマンド: P=ping B=開始 D=データ E=確定 G=読み出し Y/Z=設定の読み書き C=消去 L=描画の記録 R=ブートローダーへ再起動
+ * コマンド: P=ping B=開始 D=データ E=確定 G=読み出し Y/Z=設定の読み書き Q=無線の記録 C=消去 L=描画の記録 R=ブートローダーへ再起動
  * SPDX-License-Identifier: MIT
  */
 #include <string.h>
@@ -221,6 +221,12 @@ static void handle(uint8_t cmd, const uint8_t *p, uint16_t n) {
             break;
         }
         send('g', gbuf, len);
+        break;
+    }
+    case 'Q': { /* 無線の接続の記録を読む → 'b' */
+        static uint8_t qb[5 + 31 * 16];
+        size_t qn = eyelash_ble_log_read(qb, sizeof(qb));
+        send('b', qb, (uint16_t)qn);
         break;
     }
     case 'Y': { /* 本体の設定を読む */
